@@ -1,0 +1,688 @@
+---
+title: "FYP - Generated Data"
+format: html
+editor: visual
+---
+
+```{r}
+#Packages needed
+install.packages('ggplot2')
+install.packages('MASS')
+install.packages('coda')
+```
+
+## Data
+
+```{r}
+set.seed(123) # set seed
+
+n <- 1000
+p <- 3
+
+y <- rep(NA, n)
+x <- matrix(rnorm(n*p), n, p)
+X_data <- cbind(1, x)
+
+
+beta_true <- c(2, 4, 0, -2)
+probs <- 
+  function(z) {
+  exp(z) / (1 + exp(z))
+}
+
+pred <- X_data %*% beta_true
+
+y_data <- rbinom(n, size = 1, prob = probs(pred))
+```
+
+```{r}
+df <- data.frame(y = y_data, x1 = x[, 1], x2 = x[, 2], x3 = x[, 3])
+model <- glm(y ~ x1 + x2 + x3, data = df, family = binomial)
+
+x1_seq <- seq(min(df$x1), max(df$x1), length.out = 100)
+
+x2_fixed <- mean(df$x2)
+x3_fixed <- mean(df$x3)
+
+new_df <- data.frame(x1 = x1_seq, x2 = x2_fixed, x3 = x3_fixed)
+new_df$prob <- predict(model, newdata = new_df, type = "response")
+
+library(ggplot2)
+ggplot() +
+  geom_line(data = new_df, aes(x = x1, y = prob), color = "blue", size = 1.2) +
+  labs(x = "x", y = "Probability") +
+  theme_minimal()
+```
+
+```{r}
+set.seed(123)
+
+data <- cbind(X_data, y_data)
+
+n <- nrow(data)
+train <- sample(1:n, size = n*0.8, replace = FALSE)
+
+train_data <- data[train, ]
+test_data  <- data[-train, ]
+
+X <- train_data[,1:4]
+y <- train_data[,5]
+
+X.test <- test_data[,1:4]
+y.test <- test_data[,5]
+```
+
+```{r}
+res <- glm(y ~ 0 + X, family = binomial())
+res
+```
+
+## Newton Raphson
+
+```{r}
+n <- nrow(X)
+p <- ncol(X)
+
+beta <- rep(0, p) #beta starting values
+beta_history <- matrix(NA, nrow = 10000, ncol = p)
+
+logistic <- 
+  function(z) {
+  exp(z) / (1 + exp(z))
+}
+
+# Newton-Raphson
+start_time <- Sys.time()
+for (iter in 1:10000) {
+  pi_hat <- logistic(X %*% beta)  #pi_hat probabilities
+  
+  u <- t(X) %*% (y - pi_hat) #calculate u the first derivative
+  
+  W <- diag(as.vector(pi_hat * (1 - pi_hat)), n, n) 
+  H <- -t(X) %*% W %*% X # calculate Hessian matrix H
+  
+  beta_new <- beta - solve(H) %*% u
+  beta <- beta_new
+  
+  beta_history[iter, ] <- as.vector(beta_new)
+  if (max(abs(u)) < 1e-6) {
+  beta_history <- beta_history[1:iter, , drop = FALSE]
+  break}
+}
+end_time <- Sys.time()
+
+NR_time <- end_time - start_time
+cat("Elapsed time:", NR_time, "seconds", "\n")
+beta_NR <- beta
+print(beta_NR)
+
+var_beta <- solve(-H) #covariance
+```
+
+```{r}
+beta_history <- beta_history[1:iter, ]
+
+matplot(beta_history, type = "l", lty = 1, lwd = 2,
+        col = 1:p, xlab = "Iteration", ylab = "Beta Value",
+        main = "Convergence of Beta MLEs",
+        cex.lab = 1,
+        cex.axis = 1,
+        cex.main = 1.0)
+abline(h = beta_true, col = 1:p, lty = 2)
+```
+
+```{r}
+set.seed(1)
+
+#Misclassification Rate
+NR_probs <- logistic(X.test %*% beta_NR)
+NR_predict <- rbinom(length(NR_probs), size = 1, prob = NR_probs) #Predict success/ failure
+
+
+NR_misclass <- mean(NR_predict != y.test)
+cat("Misclassification Rate:", NR_misclass, "\n")
+
+#Confusion matrix
+table(Predicted = NR_predict, Actual = y.test)
+
+```
+
+```{r}
+#Newton Raphson MSE
+MSE_NR <- sum((beta_true - beta_NR)^2)
+MSE_NR
+```
+
+## MCMC - Block Updates
+
+```{r}
+# log-likelihood
+log_likelihood <- function(beta, y, X) {
+  XB <- X %*% beta
+  log_p <- sum(y * XB - log(1 + exp(XB)))
+  return(log_p)
+}
+
+# normal log-prior 
+log_prior <- function(beta, mu = 0, sigma = 10) { # N(0,100)
+  return(-sum((beta - mu)^2 / (2 * sigma^2)))
+}
+
+# log posterior
+log_posterior <- function(beta, y, X) {
+  return(log_likelihood(beta, y, X) + log_prior(beta))
+}
+```
+
+```{r}
+library(MASS)
+
+MH_logistic <- function(X, y, init, iter, burnin, thin, Sigma_prop) {
+  
+  p <- ncol(X)
+  beta <- matrix(NA, nrow = iter, ncol = p)
+  beta[1, ] <- init #initial values
+  accept_sum <- 0 #no. of accepted proposals
+  
+  for (i in 2:iter) {
+    beta_star <- mvrnorm(1, mu = beta[i - 1, ], Sigma = Sigma_prop)
+   
+    
+    log_R <- log_posterior(beta_star, y, X) - log_posterior(beta[i - 1, ], y, X)
+    
+    if (log(runif(1)) < log_R) {
+       beta[i, ] <- beta_star
+      accept_sum <- accept_sum + 1
+    } else {
+      beta[i, ] <- beta[i - 1, ]
+    }
+  }
+  
+  cat("Acceptance rate was ", 100 * accept_sum / iter, "%\n", sep = "")
+  
+  beta_thinned <- beta[(burnin + 1):iter, ]
+  beta_thinned <- beta_thinned[seq(1, nrow(beta_thinned), by = thin), ]
+  
+  return(beta_thinned)
+}
+
+```
+
+```{r}
+set.seed(123) #Set seed
+beta_init <- c(0,0,0,0)
+cov_mle <- var_beta
+
+start_time <- Sys.time()
+mcmc <- MH_logistic(X, y, beta_init, iter = 10000, burnin = 1000, thin = 10, Sigma_prop = cov_mle)
+end_time <- Sys.time()
+
+block_mcmc_time <- end_time - start_time
+cat("Elapsed time:", block_mcmc_time, "seconds", "\n")
+
+#Compute parameter mean estimates
+parameter_means <- colMeans(mcmc)
+parameter_means
+```
+
+```{r}
+par(mfrow = c(2, 2))
+for(i in 1:4) {
+  hist(mcmc[, i], breaks = 30, probability = TRUE,
+        main = paste("Marginal Density of Beta", i-1),,
+       xlab = paste("Beta", i-1))
+  lines(density(mcmc[, i]), col = "blue", lwd = 2)
+  abline(v = beta_true[i], col = "red", lwd = 2, lty = 2)
+  
+  legend("topright",
+         legend = list("Posterior Density",
+                       bquote("True " * beta[.(i - 1)])),
+         col = c("blue", "red"),
+         lty = c(1, 2),
+         lwd = 2,
+         bty = "n",
+         cex = 0.6)
+}
+```
+
+```{r}
+matplot(mcmc, type = 'l', lty = 1, col = 1:4,
+        xlab = "Iteration", ylab = "Beta Values")
+abline(h = beta_true, col = 1:4, lty = 2)
+```
+
+```{r}
+par(mfrow = c(2, 2))
+acf(mcmc[,1], main = "", xlab = expression("Lag - " * beta[0]))
+acf(mcmc[,2], main = "", xlab = expression("Lag - " * beta[1]))
+acf(mcmc[,3], main = "", xlab = expression("Lag - " * beta[2]))
+acf(mcmc[,4], main = "", xlab = expression("Lag - " * beta[3]))
+
+```
+
+```{r}
+library(coda)
+
+# Gelman-Rubin convergence plots
+beta_init2 <- c(2, 2, 2, 2)
+beta_init3 <- c(-2, -2, -2, -2)
+
+mcmc1 <- MH_logistic(X, y, beta_init, iter = 10000, burnin = 1000, thin = 10, Sigma_prop = cov_mle)
+mcmc2 <- MH_logistic(X, y, beta_init2, iter = 10000, burnin = 1000, thin = 10, Sigma_prop = cov_mle)
+mcmc3 <- MH_logistic(X, y, beta_init3, iter = 10000, burnin = 1000, thin = 10, Sigma_prop = cov_mle)
+
+chain1 <- as.mcmc(mcmc1)
+chain2 <- as.mcmc(mcmc2)
+chain3 <- as.mcmc(mcmc3)
+
+chains_block <- mcmc.list(chain1, chain2, chain3)
+gelman.plot(chains_block)
+```
+
+```{r}
+set.seed(12)
+
+#Posterior predictive
+n_iter <- nrow(mcmc)
+n_obs <- nrow(X.test)
+
+#Predicted probabilities
+block_probs <- matrix(NA, nrow = n_obs, ncol = n_iter)
+for(i in 1:n_iter) {
+  block_probs[, i] <- logistic(X.test %*% mcmc[i, ])
+}
+
+block_means <- rowMeans(block_probs)
+block_predict <- rbinom(length(block_means), size = 1, prob = block_means) #Predict success/ failure
+
+
+block_misclass <- mean(block_predict != y.test)
+cat("Misclassification Rate:", block_misclass, "\n")
+
+#Confusion matrix
+table(Predicted = block_predict, Actual = y.test)
+```
+
+```{r}
+#MCMC Block MSE
+MSE_MCMC_block <- sum((beta_true - parameter_means)^2)
+MSE_MCMC_block
+```
+
+## MCMC - Parameter Updates
+
+```{r}
+MHGibbs_logistic <- function(X, y, init, iter, burnin, thin, Sigma_prop) {
+  
+  p <- ncol(X)
+  beta <- matrix(NA, nrow = iter, ncol = p)
+  beta[1, ] <- init 
+  
+  accept_counts <- rep(0, p)
+  
+  for (i in 2:iter) {
+    beta_current <- beta[i - 1, ]
+    
+    for (j in 1:p) {
+      beta_star <- beta_current
+      beta_star[j] <- rnorm(1, mean = beta_current[j], sd = sqrt(Sigma_prop[j, j]))
+      
+      log_R <- log_posterior(beta_star, y, X) - log_posterior(beta_current, y, X)
+      
+      if (log(runif(1)) < log_R) {
+        beta_current[j] <- beta_star[j]
+        accept_counts[j] <- accept_counts[j] + 1
+      }
+    }
+    
+    beta[i, ] <- beta_current
+  }
+  
+  overall_acceptance_rate <- 100 * sum(accept_counts) / (iter * p)
+  cat("Overall acceptance rate was ", overall_acceptance_rate, "%\n", sep = "")
+  
+  per_param_acceptance <- 100 * accept_counts / iter
+  cat("Acceptance rate per parameter (in %):\n")
+  print(per_param_acceptance)
+  
+  beta_thinned <- beta[(burnin + 1):iter,]
+  beta_thinned <- beta_thinned[seq(1, nrow(beta_thinned), by = thin),]
+  
+  return(beta_thinned)
+}
+```
+
+```{r}
+set.seed(123) #Set seed
+beta_init <- c(0,0,0,0)
+cov_mle <- var_beta
+
+start_time <- Sys.time()
+mcmc_gibbs <- MHGibbs_logistic(X, y, beta_init, iter = 10000, burnin = 1000, thin = 10, Sigma_prop = cov_mle)
+end_time <- Sys.time()
+
+para_mcmc_time <- end_time - start_time
+cat("Elapsed time:", para_mcmc_time, "seconds", "\n")
+
+#Compute parameter mean estimates
+gibbs_parameter_means <- colMeans(mcmc_gibbs)
+gibbs_parameter_means
+```
+
+```{r}
+par(mfrow = c(2, 2))
+for(i in 1:4) {
+  hist(mcmc_gibbs[, i], breaks = 30, probability = TRUE,
+        main = paste("Marginal Density of Beta", i-1),,
+       xlab = paste("Beta", i-1))
+  lines(density(mcmc_gibbs[, i]), col = "blue", lwd = 2)
+  abline(v = beta_true[i], col = "red", lwd = 2, lty = 2)
+  
+  legend("topright",
+         legend = list("Posterior Density",
+                       bquote("True " * beta[.(i - 1)])),
+         col = c("blue", "red"),
+         lty = c(1, 2),
+         lwd = 2,
+         bty = "n",
+         cex = 0.6)
+}
+```
+
+```{r}
+matplot(mcmc_gibbs, type = 'l', lty = 1, col = 1:4,
+        xlab = "Iteration", ylab = "Beta Values")
+abline(h = beta_true, col = 1:4, lty = 2)
+```
+
+```{r}
+par(mfrow = c(2, 2))
+acf(mcmc_gibbs[,1], main = "", xlab = expression("Lag - " * beta[0]))
+acf(mcmc_gibbs[,2], main = "", xlab = expression("Lag - " * beta[1]))
+acf(mcmc_gibbs[,3], main = "", xlab = expression("Lag - " * beta[2]))
+acf(mcmc_gibbs[,4], main = "", xlab = expression("Lag - " * beta[3]))
+```
+
+```{r}
+# Gelman-Rubin convergence plots
+beta_init2 <- c(2, 2, 2, 2)
+beta_init3 <- c(-2, -2, -2, -2)
+
+mcmc_gibbs1 <- MHGibbs_logistic(X, y, beta_init, iter = 10000, burnin = 1000, thin = 10, Sigma_prop = cov_mle)
+mcmc_gibbs2 <- MHGibbs_logistic(X, y, beta_init2, iter = 10000, burnin = 1000, thin = 10, Sigma_prop = cov_mle)
+mcmc_gibbs3 <- MHGibbs_logistic(X, y, beta_init3, iter = 10000, burnin = 1000, thin = 10, Sigma_prop = cov_mle)
+
+chain1 <- as.mcmc(mcmc_gibbs1)
+chain2 <- as.mcmc(mcmc_gibbs2)
+chain3 <- as.mcmc(mcmc_gibbs3)
+
+chains_para <- mcmc.list(chain1, chain2, chain3)
+gelman.plot(chains_para)
+```
+
+```{r}
+set.seed(123)
+
+#Posterior predictive
+n_iter <- nrow(mcmc_gibbs)
+n_obs <- nrow(X.test)
+
+#Predicted probabilities
+para_probs <- matrix(NA, nrow = n_obs, ncol = n_iter)
+for(i in 1:n_iter) {
+  para_probs[, i] <- logistic(X.test %*% mcmc_gibbs[i, ])
+}
+
+para_means <- rowMeans(para_probs)
+para_predict <- rbinom(length(para_means), size = 1, prob = para_means) #Predict success/ failure
+
+
+para_misclass <- mean(para_predict != y.test)
+cat("Misclassification Rate:", para_misclass, "\n")
+
+#Confusion matrix
+table(Predicted = para_predict, Actual = y.test)
+```
+
+```{r}
+#MCMC Parameter MSE
+MSE_MCMC_para <- sum((beta_true - gibbs_parameter_means)^2)
+MSE_MCMC_para
+```
+
+## Laplace Approximation
+
+```{r}
+mu<- rep(0, p)
+sigma2 <- rep(100, p)  #N(0, 100)
+
+sigma2_inv <- diag(1 / sigma2, nrow = p, ncol = p) # For k = l
+
+beta <- rep(0, p) #beta starting values
+
+#Newton-Raphson for MAP
+start_time <- Sys.time()
+for (iter in 1:10000) {
+  pi_hat <- logistic(X %*% beta)
+  
+  u <- (t(X) %*% (y - pi_hat)) - (beta - mu)/sigma2
+  
+  W <- diag(as.vector(pi_hat * (1 - pi_hat)), n, n)
+  H_like <- - t(X) %*% W %*% X
+  
+  H <- H_like - sigma2_inv
+ 
+  beta_new <- beta - solve(H) %*% u
+  beta <- beta_new
+  
+  if (max(abs(u)) < 1e-6) break
+}
+end_time <- Sys.time()
+
+laplace_time <- end_time - start_time
+cat("Elapsed time:", laplace_time, "seconds", "\n")
+cat("Converged in", iter, "iterations\n\n")
+
+beta_MAP <- beta
+cat("MAP estimate of beta:\n")
+print(beta_MAP)
+```
+
+```{r}
+#log posterior at B_MAP
+logpost_betaMAP <- log_posterior(beta_MAP, y, X)
+
+#2nd order taylor at B_MAP
+log_laplace <- function(beta) {
+  logpost_betaMAP + 0.5 * t(beta - beta_map) %*% H %*% (beta - beta_map)
+}
+
+#Exponentiate to get Gaussian Approx
+laplace <- function(beta) {
+  exp(log_laplace(beta))
+}
+
+Sigma_laplace <- solve(-H) #Covariance Matrix
+```
+
+```{r}
+set.seed(123)
+#Parameter distributions
+laplace_samples <- mvrnorm(n = 10000, mu = beta_MAP
+, Sigma = Sigma_laplace)
+
+par(mfrow = c(2, 2))
+for(i in 1:4) {
+  hist(laplace_samples[, i], breaks = 30, probability = TRUE,
+       main = paste("Marginal Density of Beta", i-1),
+       xlab = paste("Beta", i-1))
+  lines(density(laplace_samples[, i]), col = "blue", lwd = 2)
+  abline(v = beta_true[i], col = "red", lwd = 2, lty = 2)
+  
+    legend("topright",
+         legend = list("Posterior Density",
+                       bquote("True " * beta[.(i - 1)])),
+         col = c("blue", "red"),
+         lty = c(1, 2),
+         lwd = 2,
+         bty = "n",
+         cex = 0.6)
+    
+}
+par(mfrow = c(1, 1))
+```
+
+```{r}
+set.seed(1234)
+
+#Posterior predictive
+
+#Predicted probabilities
+laplace_prob <- apply(laplace_samples, 1, function(samp) {
+  logistic(X.test %*% samp)
+})
+
+
+laplace_means <- rowMeans(laplace_prob)
+laplace_predict <- rbinom(length(laplace_means), size = 1, prob = laplace_means) #Predict success/ failure
+
+
+laplace_misclass <- mean(laplace_predict != y.test)
+cat("Misclassification Rate:", laplace_misclass, "\n")
+
+#Confusion matrix
+table(Predicted = laplace_predict, Actual = y.test)
+```
+
+```{r}
+#Laplace Approx MSE
+MSE_laplace <- sum((beta_true - beta_MAP)^2)
+MSE_laplace
+```
+
+## Variational Approximation
+
+```{r}
+N <- nrow(X)
+p <- ncol(X)
+  
+mu0 <- rep(0, p)
+Sigma0 <- diag(100, p) #N(0,100)
+
+Sigma0_inv <- solve(Sigma0)
+
+variational_approximation <- function(X, y, mu0, Sigma0, maxiter, tol) {
+  mu  <- mu0
+  Sig <- Sigma0
+  eta  <- rep(1, N)
+  
+  for (iter in seq_len(maxiter)) {
+
+    lambda <- (logistic(eta) - 0.5) / (2 * eta) 
+
+    Sig_inv <- Sigma0_inv + 2 * t(X) %*% (lambda * X)
+
+    Sig_new <- solve(Sig_inv)
+    mu_new  <- Sig_new %*% (Sigma0_inv %*% mu0 + t(X) %*% (y - 0.5))
+
+    eta_square    <- rowSums((X %*% (Sig_new + tcrossprod(mu_new))) * X)
+    eta_new  <- sqrt(eta_square)
+    
+    if (max(abs(mu_new - mu)) < tol) {
+      mu  <- mu_new;
+      Sig <- Sig_new;
+      eta <- eta_new
+      break
+    }
+    mu  <- mu_new
+    Sig <- Sig_new
+    eta  <- eta_new
+  }
+
+  list(mu = drop(mu), Sigma = Sig, eta = eta, iter = iter)
+}
+
+
+start_time <- Sys.time()
+var_approx <- variational_approximation(X, y, mu0 = mu0, Sigma0 = Sigma0, maxiter = 500, tol = 1e-6)
+end_time <- Sys.time()
+
+varapprox_time <- end_time - start_time
+cat("Elapsed time:", varapprox_time, "seconds", "\n")
+
+m <- var_approx$mu
+m
+
+S <- var_approx$Sig
+var_approx$iter
+```
+
+```{r}
+set.seed(123)
+#Parameter distributions
+varapprox_samples <- mvrnorm(n = 10000, mu = m, Sigma = S)
+
+par(mfrow = c(2, 2))
+for(i in 1:4) {
+  hist(varapprox_samples[, i], breaks = 30, probability = TRUE,
+       main = paste("Marginal Density of Beta", i-1),
+       xlab = paste("Beta", i-1))
+  lines(density(varapprox_samples[, i]), col = "blue", lwd = 2)
+  abline(v = beta_true[i], col = "red", lwd = 2, lty = 2)
+  
+  legend("topright",
+        legend = list("Posterior Density",
+                       bquote("True " * beta[.(i - 1)])),
+         col = c("blue", "red"),
+         lty = c(1, 2),
+         lwd = 2,
+         bty = "n",
+         cex = 0.5)
+  
+}
+par(mfrow = c(1, 1))
+```
+
+```{r}
+set.seed(12345)
+
+#Posterior predictive
+
+#Predicted probabilities
+varapprox_prob <- apply(varapprox_samples, 1, function(samp) {
+  logistic(X.test %*% samp)
+})
+
+
+varapprox_means <- rowMeans(varapprox_prob)
+varapprox_predict <- rbinom(length(varapprox_means), size = 1, prob = varapprox_means) #Predict success/ failure
+
+
+varapprox_misclass <- mean(varapprox_predict != y.test)
+cat("Misclassification Rate:", varapprox_misclass, "\n")
+
+#Confusion matrix
+table(Predicted = varapprox_predict, Actual = y.test)
+```
+
+```{r}
+#Variational Approximation MSE
+MSE_varapprox <- sum((beta_true - m)^2)
+MSE_varapprox
+```
+
+\
+
+```{r}
+results_table <- data.frame(
+  Method = c("Newton-Raphson MLE", "MCMC Block Updates", "MCMC Parameter Updates", "Laplace Approximation", "Variational Approximation"),
+  MSE = c(MSE_NR, MSE_MCMC_block, MSE_MCMC_para, MSE_laplace, MSE_varapprox),
+  Run_Time = c(NR_time, block_mcmc_time, para_mcmc_time, laplace_time, varapprox_time),
+  Misclassification_Rate = c(NR_misclass, block_misclass, para_misclass, laplace_misclass, varapprox_misclass)
+)
+
+names(results_table)[names(results_table) == "Run_Time"] <- "Run Time"
+names(results_table)[names(results_table) == "Misclassification_Rate"] <- "Misclassification Rate"
+
+print(results_table)
+```

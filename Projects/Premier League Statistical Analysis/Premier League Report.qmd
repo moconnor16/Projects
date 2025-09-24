@@ -1,0 +1,523 @@
+---
+title: "Premier League Report"
+format: html
+editor: visual
+---
+
+```{r}
+#Packages needed
+install.packages('readxl')
+install.packages('tibble')
+install.packages('dplyr')
+install.packages('tidyr')
+install.packages('ggplot2')
+install.packages('cowplot')
+```
+
+This report examines a dataset on Player Goal and Shot Creation from the 2022/23 football Premier League season. This dataset was taken directly from FBRef.com from this link <https://fbref.com/en/comps/9/2022-2023/gca/2022-2023-Premier-League-Stats> on the 18/11/23.
+
+The dataset contains the following variables: (as given at the start of the manipulation section)
+
+-   **Rk:** The rank of the player.
+
+-   **Player Name:** Name of the player.
+
+-   **Nation:** Nationality of the player.
+
+-   **Position:** What position on the pitch they play (GK,DF,MF,FW).
+
+-   **Club:** What football team they played for during the 22/23 season.
+
+-   **Age:** Age of the player at the start of the 22/23 season.
+
+-   **Born:** Year of birth.
+
+-   **Nineties:** The amount of minutes they played in the season divided by 90. (Range: 0-38).
+
+-   **SCA:** Total Shot creating actions, the two offensive actions leading directly to a shot on goal. Note: A single player can receive credit for multiple actions and the shot-taker can also receive credit.
+
+-   **SCA90:** Shot creating actions per 90 minutes, the total shot creating actions divided by how many nineties they've played.
+
+-   **Pass_Live_SCA:** Completed live-ball passes that lead to a shot attempt.
+
+-   **Pass_Dead_SCA:** Completed dead-ball passes that lead to shot attempt. (This includes free-kicks, corners, throw-ins, kick-off, goal-kicks).
+
+-   **Take_On_SCA:** Successful take-ons that lead to a shot attempt.
+
+-   **Shots_SCA:** Shots that lead to another shot attempt.
+
+-   **Fouls_Drawn_SCA:** Fouls Drawn that lead to a shot attempt.
+
+-   **Defensive_Action_SCA:** Defensive Actions that lead to a shot attempt.
+
+-   **GCA:** Total Goal creating actions, the two offensive actions leading directly to a goal. Note: A single player can receive credit for multiple actions.
+
+-   **GCA90:** Goal creating actions per 90 minutes, the total goal creating actions divided by how many nineties they've played.
+
+-   **Pass_Live_GCA:** Completed live-ball passes that lead to a goal.
+
+-   **Pass_Dead_GCA:** Completed dead-ball passes that lead to goal. (This includes free-kicks, corners, throw-ins, kick-off, goal-kicks).
+
+-   **Take_On_GCA:** Successful take-ons that lead to a goal.
+
+-   **Shots_GCA:** Shots that lead to another goal.
+
+-   **Fouls_Drawn_GCA:** Fouls Drawn that lead to a goal.
+
+-   **Defensive_Action_GCA:** Defensive Actions that lead to a goal.
+
+-   **Matches:** Hyperlink to the corresponding matches played by the player.
+
+```{r,warning=FALSE}
+#Import the dataset
+library(readxl)
+rawpremier <- read_xlsx("PremierStats.xlsx")
+#Set data as a tibble
+library(tibble)
+rawpremier <- as_tibble(rawpremier)
+```
+
+## Manipulation
+
+Before we start any analysis on the data, we should manipulate the dataset.
+
+1.  Give meaningful names to all the columns
+
+```{r}
+names(rawpremier) <- c("Rk","Player Name","Nation","Position","Club","Age","Born","Nineties","SCA","SCA90","Pass_Live_SCA","Pass_Dead_SCA","Take_On_SCA","Shots_SCA", "Fouls_Drawn_SCA","Defensive_Action_SCA","GCA","GCA90","Pass_Live_GCA","Pass_Dead_GCA","Take_On_GCA","Shots_GCA", "Fouls_Drawn_GCA","Defensive_Action_GCA","Matches")
+```
+
+2.  The first and last column don't contain any useful data, remove them.
+
+```{r, warning=FALSE}
+library(dplyr)
+premier <- select(rawpremier, -"Rk",-"Matches")
+```
+
+3.  In the positions column, some of the observations (players) have 2 positions listed, the first one being their primary position and the second one separated by the comma being their secondary position. We want to separate these.
+
+```{r, warning=FALSE}
+library(tidyr)
+premier <- separate(premier, Position, into = c("Primary_Position", "Secondary_Position"), sep = ",")
+#Not every player has a secondary position, replace the NA with ":".
+premier <- premier %>% mutate(Secondary_Position = coalesce(Secondary_Position, ":"))
+```
+
+4.  Some of the players in the dataset have not played any games, we want to remove these as they provide no useful data. Others have played very little games, we also want to remove these as their sample size is very little and hence their corresponding data is not statistically significant.
+
+```{r}
+#Removing all players who have less than 5 90 minutes played
+premier <- filter(premier, Nineties > 5)
+```
+
+5.  The total shot and goal creating actions have per 90 columns, however the specific shot and goal creating actions do not. Create these new columns.
+
+```{r}
+#Round these new columns to 2 decimal places
+premier <- cbind(premier, "Pass_Live_SCA90" = round(premier$Pass_Live_SCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Pass_Dead_SCA90" = round(premier$Pass_Dead_SCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Take_On_SCA90" = round(premier$Take_On_SCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Shots_SCA90" = round(premier$Shots_SCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Fouls_Drawn_SCA90" = round(premier$Fouls_Drawn_SCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Defensive_Action_SCA90" = round(premier$Defensive_Action_SCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Pass_Live_GCA90" = round(premier$Pass_Live_GCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Pass_Dead_GCA90" = round(premier$Pass_Dead_GCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Take_On_GCA90" = round(premier$Take_On_GCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Shots_GCA90" = round(premier$Shots_GCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Fouls_Drawn_GCA90" = round(premier$Fouls_Drawn_GCA/premier$Nineties,digits = 2))
+premier <- cbind(premier, "Defensive_Action_GCA90" = round(premier$Defensive_Action_GCA/premier$Nineties,digits = 2))
+#Move these new columns to where they should stand in the dataset
+premier <- relocate(premier, Pass_Live_SCA90,Pass_Dead_SCA90,Take_On_SCA90,Shots_SCA90, Fouls_Drawn_SCA90,Defensive_Action_SCA90, .before = 17:23)
+```
+
+## Analysis
+
+For the analysis section of this report, I will be examining the shot and goal creating actions performance arranged by player in the 22/23 Premier League season. I will examine the performance of every player, club, age and position.
+
+### Overview of overall Shot and Goal Creating Actions
+
+Let's start the analysis by having a look in the overall SCA and GCA categories before we take a deeper dive into the specific SCA and GCA categories and the categorical variables associated with the player.
+
+Let's look at an overall overview of the SCA variable.
+
+```{r}
+#For this, I will keep it to outfield players by removing any goalkeepers as they skew the results
+premierGK <- premier %>%
+  filter(Primary_Position != "GK")
+#Calculate the central tendicies of the SCA variable
+premierstat <- premierGK[, c("SCA", "SCA90")]
+sapply(premierstat, \(x) data.frame("mean" = mean(x), "median" = median(x), "IQR" = IQR(x)))
+
+
+#Create a boxplot to represent SCA
+boxplot(premierGK$SCA, main = "Boxplot of outfield players Total Shot Creating Actions", ylab = "SCA")
+
+#Create a boxplot to represent SCA90
+boxplot(premierGK$SCA90, main = "Boxplot of outfield players Shot Creating Actions per 90", ylab = "SCA90")
+```
+
+Here represented in the table we have see some of the central statistics for the SCA and SCA90 variables, which can be seen on the two boxplots.
+
+For the Total Shot Creating Actions, represented in the first box plot, there is a very large range with a low median (29) and low mean (42.15). The increased jump from the median to the mean indicates a large amount of outliers with a high SCA, this can also be seen in the corresponding boxplot. Hence, this concludes that the majority of players have relatively low SCA values however there are a small amount of players with extremely high values.
+
+This same conclusion can be made through the Total Shot Creating Actions per 90 minutes as well, so lets examine these elite high performing SCA and SCA90 players.
+
+Define an elite SCA player as someone who has greater than 130 total SCA last season and an elite SCA90 player as someone who has greater than 4.6 SCA per 90 minutes.
+
+```{r}
+eliteSCA <- ifelse(premier$SCA > 130, "elite", "non-elite")
+eliteSCA90 <- ifelse(premier$SCA90 > 4.6, "elite", "non-elite")
+# How many elite SCA and SCA90 players were there in the premier league last season
+sum(eliteSCA == "elite")
+sum(eliteSCA90 == "elite")
+```
+
+Hence we can see that there are 11 elite total SCA players and 12 elite SCA90 players.
+
+Now let's examine these elite performers.
+
+```{r,warning=FALSE}
+#Arranging the players by Shot Creating Actions(SCA)
+TopSCA <- premier %>%
+  arrange(desc(SCA)) %>%
+  select(`Player Name`,SCA)
+#Printing a table of the elite SCA performers and their corresponding value
+knitr::kable(TopSCA[1:11,])
+#Plot on a histogram
+library(ggplot2)
+SCAelite <- ggplot(TopSCA[1:11,], aes(x = reorder(`Player Name`, -SCA), y = SCA)) +
+  geom_bar(stat = "identity", fill = "lightblue") + labs(title = "Elite Shot Creating Actions(SCA) Players", x = "Player Name", y = "SCA") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+SCAelite
+
+#Arranging the players by Shot Creating Actions per 90(SCA90)
+TopSCA90 <- premier %>%
+  arrange(desc(SCA90)) %>%
+  select(`Player Name`,SCA90)
+#Printing a table of the elite SCA90 performers and their corresponding value
+knitr::kable(TopSCA90[1:12,])
+#Plot on a histogram
+SCA90elite <- ggplot(TopSCA90[1:12,], aes(x = reorder(`Player Name`, -SCA90), y = SCA90)) +
+  geom_bar(stat = "identity", fill = "skyblue") + labs(title = "Elite Shot Creating Actions per 90(SCA90) Players", x = "Player Name", y = "SCA90") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+SCA90elite
+```
+
+From these tables and corresponding bar charts we can observe our elite SCA and SCA90 players, seen as the outliers in the boxplots above, as expected most of the elite SCA players can also be seen to be in the elite SCA90 category.
+
+Now lets create a plot combining the two tables, looking at both Shot Creating Actions and Shot Creating Actions per 90 simultaneously.
+
+```{r}
+#Find all elite players in both variables
+TopShot <- premier %>%
+  filter(SCA90 > 4.60 | SCA > 130) %>%
+  select(`Player Name`,SCA, SCA90)
+#Plot SCA against SCA90 for elite players 
+TopShotPlot <- ggplot(TopShot, aes(x = SCA, y = SCA90, label = `Player Name`)) + geom_point(size = 3, color = "blue") + geom_text(vjust = 1.5, size = 2.5) + lims(x = c(25,250), y = c(2.5,7)) + labs(title = "Elite Players SCA against SCA per 90", x = "Total Shot Creating Actions", y = "Shot Creating Actions per 90 minutes")
+TopShotPlot
+```
+
+This graph gives us a really good understanding on the actual elite highest performing players for shot creating actions, we can see that the outlier players Bruno Fernandes and Kevin De Bruyne have really high metrics both being located in the top right corner. If we then look to the left of the graph we can see Enciso and Saint-Maximin, this indicates that although they have very high SCA per 90 their total SCA is relatively quite low meaning that they haven't played a lot of minutes, hence their sample size is quite small comparatively and it is harder to judge whether this is a true representation of their ability. Then finally at the bottom of the graph there is Mohammed Salah, Pascal Gross and Harry Kane, this indicates that although they have very high overall SCA values their SCA per 90 is relatively low to the others on the graph, hence they are very consistent performers on the basis of playing a lot but aren't the highest on a per 90 minutes basis.
+
+Now, by performing the same operations as above let's have a look at an overview of the GCA variable.
+
+*Note: For this I will not go into as great detail as with the SCA variable as the results and conclusions are largely the same however I will compare both the SCA and GCA at the end.*
+
+```{r}
+#For this, I will also keep it to outfield players by removing any goalkeepers as they skew the results
+#Calculate the central tendicies of the GCA variable
+premierstat2 <- premierGK[, c("GCA", "GCA90")]
+sapply(premierstat2, \(x) data.frame("mean" = mean(x), "median" = median(x), "IQR" = IQR(x)))
+
+#Create a boxplot to represent GCA
+boxplot(premierGK$GCA, main = "Boxplot of outfield players Total Goal Creating Actions", ylab = "GCA")
+
+#Create a boxplot to represent GCA90
+boxplot(premierGK$GCA90, main = "Boxplot of outfield players Goal Creating Actions per 90", ylab = "GCA90")
+```
+
+Here we have see some of the central statistics for the GCA and GCA90 variables, which are represented on the two boxplots respectively.
+
+From these results we can draw the same conclusions as we did for our SCA results, that the total GCA and GCA90 have a low relative mean and median with high performing elite outliers located at the top of the boxplots.
+
+Now let's define an elite GCA player as someone who has greater than 16 total SCA last season and an elite GCA90 player as someone who has greater than 0.7 GCA per 90 minutes.
+
+```{r}
+eliteGCA <- ifelse(premier$GCA > 16, "elite", "non-elite")
+eliteGCA90 <- ifelse(premier$GCA90 > 0.7, "elite", "non-elite")
+# How many elite SCA and SCA90 players were there in the premier league last season
+sum(eliteGCA == "elite")
+sum(eliteGCA90 == "elite")
+```
+
+Hence we can see that there are 13 elite total GCA players and 10 elite GCA90 players.
+
+Now let's examine these elite performers.
+
+```{r}
+#Arranging the players by Goal Creating Actions(GCA)
+TopGCA <- premier %>%
+  arrange(desc(GCA)) %>%
+  select(`Player Name`,GCA)
+#Printing a table of the elite GCA performers and their corresponding value
+knitr::kable(TopGCA[1:13,])
+#Plot this table on a barchart
+ggplot(TopGCA[1:13,], aes(x = reorder(`Player Name`, -GCA), y = GCA)) +
+  geom_bar(stat = "identity", fill = "tomato") + labs(title = "Elite Goal Creating Actions(GCA) Players", x = "Player Name", y = "GCA") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#Now arranging the players by Goal Creating Actions per 90 minutes (GCA90)
+TopGCA90 <- premier %>%
+  arrange(desc(GCA90)) %>%
+  select(`Player Name`,GCA90)
+#Printing a table of the elite GCA performers and their corresponding value
+knitr::kable(TopGCA90[1:10,])
+#Plot this table on a barchart
+ggplot(TopGCA90[1:10,], aes(x = reorder(`Player Name`, -GCA90), y = GCA90)) +
+  geom_bar(stat = "identity", fill = "tomato3") + labs(title = "Elite Goal Creating Actions per 90(GCA90) Players", x = "Player Name", y = "GCA90") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Hence, from these tables and bar charts we can view the elite GCA and GCA90 players, we notice again that a lot of these players overlap in GCA and GCA90 similarly to our SCA results.
+
+Now lets create a plot combining the two tables, looking at both Goal Creating Actions and Goal Creating Actions per 90 simultaneously.
+
+```{r}
+#Find all elite players in both variables
+TopGoal <- premier %>%
+   filter(GCA90 > 0.7 | GCA > 16) %>%
+  select(`Player Name`,GCA, GCA90)
+#Plot GCA against GCA90 for elite players 
+TopGoalPlot <- ggplot(TopGoal, aes(x = GCA, y = GCA90, label = `Player Name`)) + geom_point(size = 3, color = "red") + geom_text(vjust = 1.5, size = 2.5) + lims(x = c(0,35), y = c(0.3,1.3)) + labs(title = "Elite Players GCA against GCA per 90", x = "Total Goal Creating Actions", y = "Goal Creating Actions per 90 minutes")
+TopGoalPlot
+```
+
+We can spot the similarity in this graph to the corresponding SCA graph, we have one outlier player in Kevin De Bruyne in the very top right showing a very high GCA and GCA90 value with 4 players a bit below him who also have very high metrics. Then on the left of the graph we notice a clump of players with high SCA90 but low relative SCA, and at the bottom we have another clump showing the players with a high SCA but low relative SCA90.
+
+Comparing SCA to GCA:
+
+```{r, warning=FALSE}
+library(cowplot)
+#Plotting our final overall SCA and GCA plots together to compare
+plot_grid(TopShotPlot, TopGoalPlot)
+```
+
+Comparing these SCA and GCA plots against each other, we can observe a very similar distribution of the players across the plots (as explained above) and we also notice a similar position for a lot of the players on both plots. However, one player stands out when comparing, Bruno Fernandes. In the SCA plot he is located in the top right hand-side corner but in the GCA graph he is located towards the very bottom. This is demonstrating that his shot creating actions are extremely high but his goal creating actions are substantially lower comparative to the other top performers in the league.
+
+### Live and Dead Pass creating actions by Club
+
+Now let's examine the data with respect to the club. We have already looked into the overall shot and goal creating actions, now lets take a look at some specific shot and goal creating actions. Here we will compare Pass_Live, that is completed live-ball passes that lead to a shot/goal, and Pass_Dead, completed dead-ball passes that lead to a shot/goal (Such as free-kick, corner, etc.).
+
+*Note : For this we use the original dataset before removing the players with small sample sizes, this is because we are summing the total of all the players for each club so we want to use all the data to get a fair result. Also, we are only focused on the overall variables and not the per 90 minutes variables as we are dealing with clubs who all played the exact same amount of games, whereas for players it is useful to adjust as they have played different amount of games.*
+
+```{r}
+#Arranging the clubs by Pass_Live_SCA
+ClubPassLiveSCA <- rawpremier %>%
+  group_by(Club) %>%
+  summarise(PassLiveSCAsum = sum(Pass_Live_SCA)) %>%
+  arrange(desc(PassLiveSCAsum)) %>%
+  select(Club,PassLiveSCAsum)
+#Printing Pass_Live_SCA table for all clubs
+knitr::kable(ClubPassLiveSCA)
+
+#Arranging the clubs by Pass_Live_GCA
+ClubPassLiveGCA <- rawpremier %>%
+  group_by(Club) %>%
+  summarise(PassLiveGCAsum = sum(Pass_Live_GCA)) %>%
+  arrange(desc(PassLiveGCAsum)) %>%
+  select(Club,PassLiveGCAsum)
+#Printing Pass_Live_GCA table for all clubs
+knitr::kable(ClubPassLiveGCA)
+
+ClubPassLive <- rawpremier %>%
+  group_by(Club) %>%
+  summarise(PassLiveSCAsum = sum(Pass_Live_SCA),PassLiveGCAsum = sum(Pass_Live_GCA))%>%
+  select(Club,PassLiveSCAsum, PassLiveGCAsum)
+#Plotting Pass Live SCA and GCA against each other
+PassLivePlot <- ggplot(ClubPassLive, aes(x = PassLiveGCAsum, y = PassLiveSCAsum, label = Club)) + geom_point(size = 3, color = "purple") + geom_text(vjust = 1.5, size = 2.5) + labs(title = "Comparing Live Pass SCA and GCA", x = "Live Pass Goal Creating Actions", y = "Live Pass Shot Creating Actions")
+PassLivePlot
+```
+
+The two tables show every clubs total Pass_Live SCA and GCA with a corresponding plot comparing the two.
+
+From this plot comparing the amount of shot and goal creating actions from live ball passes, we can observe a clear correlation as expected with the same 6 teams topping both metric, located at the top right corner.
+
+```{r}
+#Arranging the clubs by Pass_Dead_SCA
+ClubPassDeadSCA <- rawpremier %>%
+  group_by(Club) %>%
+  summarise(PassDeadSCAsum = sum(Pass_Dead_SCA)) %>%
+  arrange(desc(PassDeadSCAsum)) %>%
+  select(Club,PassDeadSCAsum)
+#Printing Pass_Dead_SCA table for all clubs
+knitr::kable(ClubPassDeadSCA)
+
+#Arranging the clubs by Pass_Dead_GCA
+ClubPassDeadGCA <- rawpremier %>%
+  group_by(Club) %>%
+  summarise(PassDeadGCAsum = sum(Pass_Dead_GCA)) %>%
+  arrange(desc(PassDeadGCAsum)) %>%
+  select(Club,PassDeadGCAsum)
+#Printing Pass_Dead_GCA table for all clubs
+knitr::kable(ClubPassDeadGCA)
+
+
+ClubPassDead <- rawpremier %>%
+  group_by(Club) %>%
+  summarise(PassDeadSCAsum = sum(Pass_Dead_SCA),PassDeadGCAsum = sum(Pass_Dead_GCA))%>%
+  select(Club,PassDeadSCAsum, PassDeadGCAsum)
+#Plotting Pass Dead SCA and GCA against each other
+PassDeadPlot <- ggplot(ClubPassDead, aes(x = PassDeadGCAsum, y = PassDeadSCAsum, label = Club)) + geom_point(size = 3, color = "orange") + geom_text(vjust = 1.5, size = 2.5) + labs(title = "Comparing Dead Pass SCA and GCA", x = "Dead Pass Goal Creating Actions", y = "Dead Pass Shot Creating Actions")
+PassDeadPlot
+```
+
+From this plot of dead pass creating actions, we observe again that positive correlation as expected, this time the correlation isn't as clear but that can be explained by the small sample size of the dead pass goal creating actions. Comparing this to the previous live passes plot we can observe a few teams who have completely different positions on the plots. We see that Leeds, Brentford and Fulham are all significantly higher on the dead pass plot, this means that they create and score more goals from dead ball positions than live passes comparative to the rest of the league. And on the flip side of this we can see Brighton and Manchester United who are much higher in live passes than dead passes comparatively.
+
+### Average SCA and GCA values per position
+
+Now lets examine the specific shot and goal creating actions per position (GK,DF,MF,FW).
+
+*Note: For this we will only consider the players primary position as this is where they would've played the majority of their games. We will also only be looking at the per 90 variables, this is as we are using the mean so it will give more accurate results, the overall variables rely too much on the amount of minutes played.*
+
+```{r}
+posSCA <- premier %>%
+  group_by(Primary_Position) %>%
+  summarise(LivePass = mean(Pass_Live_SCA90), DeadPass = mean(Pass_Dead_SCA90), TakeOn = mean(Take_On_SCA90), Shots = mean(Shots_SCA90), Fouls = mean(Fouls_Drawn_SCA90), Defense = mean(Defensive_Action_SCA90)) %>%
+  select(Primary_Position, LivePass, DeadPass, TakeOn, Shots, Fouls, Defense)
+#Printing table on the average specific GCA value's per position
+knitr::kable(posSCA)
+#Printing what position is on average highest for Live_Pass_SCA
+posSCA[["Primary_Position"]][which.max(posSCA[["LivePass"]])]
+#Printing what position is on average highest for Live_Pass_SCA
+posSCA[["Primary_Position"]][which.max(posSCA[["DeadPass"]])]
+#Printing what position is on average highest for Live_Pass_SCA
+posSCA[["Primary_Position"]][which.max(posSCA[["TakeOn"]])]
+#Printing what position is on average highest for Live_Pass_SCA
+posSCA[["Primary_Position"]][which.max(posSCA[["Shots"]])]
+#Printing what position is on average highest for Live_Pass_SCA
+posSCA[["Primary_Position"]][which.max(posSCA[["Fouls"]])]
+#Printing what position is on average highest for Live_Pass_SCA
+posSCA[["Primary_Position"]][which.max(posSCA[["Defense"]])]
+```
+
+Therefore in terms of shot creating opportunities, we see that per game on average forwards complete the most for live passes, take ons, shots and fouls drawn and midfielders on average complete the most for dead passes and defensive actions.
+
+```{r}
+posGCA <- premier %>%
+  group_by(Primary_Position) %>%
+  summarise(LivePass = mean(Pass_Live_GCA90), DeadPass = mean(Pass_Dead_GCA90), TakeOn = mean(Take_On_GCA90), Shots = mean(Shots_GCA90), Fouls = mean(Fouls_Drawn_GCA90), Defense = mean(Defensive_Action_GCA90)) %>%
+  select(Primary_Position, LivePass, DeadPass, TakeOn, Shots, Fouls, Defense)
+#Printing table on the average specific GCA value's per position
+knitr::kable(posGCA)
+#Printing what position is on average highest for Live_Pass_SCA
+posGCA[["Primary_Position"]][which.max(posGCA[["LivePass"]])]
+#Printing what position is on average highest for Live_Pass_SCA
+posGCA[["Primary_Position"]][which.max(posGCA[["DeadPass"]])]
+#Printing what position is on average highest for Live_Pass_SCA
+posGCA[["Primary_Position"]][which.max(posGCA[["TakeOn"]])]
+#Printing what position is on average highest for Live_Pass_SCA
+posGCA[["Primary_Position"]][which.max(posGCA[["Shots"]])]
+#Printing what position is on average highest for Live_Pass_SCA
+posGCA[["Primary_Position"]][which.max(posGCA[["Fouls"]])]
+#Printing what position is on average highest for Live_Pass_SCA
+posGCA[["Primary_Position"]][which.max(posGCA[["Defense"]])]
+```
+
+And in terms of goal creating opportunities, we see that per game on average forwards complete the most for live passes, take ons, shots, fouls drawn and defensive actions and midfielders on average complete the most for dead passes.
+
+Hence we can observe that on average per game forwards complete the most shot/goal creating opportunities for most of the specific SCA and GCA variables. Midfielders leading in terms of dead passes indicates that most set-pieces (corners, free-kicks, etc.) are taken by midfielders. While goalkeepers and defenders come last and 2nd last respectively in all the metrics indicating that on average both positions produce very little shot and goal creating actions.
+
+### SCA by Age
+
+Now let's examine the relation between age and shot creating opportunities. For this I have decided to only look at SCA and not GCA as we are dealing with small samples when we split the dataset up with regards to age, therefore SCA which is more frequent will give us a better representation. Like our analysis on positions we will only be looking at the per 90 variables, this is as we are using the mean so it will give more accurate results.
+
+```{r}
+#Checking what class the age variable is
+class(premier$Age)
+#Checking the age range
+range(premier$Age)
+#Age is a numeric variable, change to an ordered factor using the range
+premier$Age <- factor(premier$Age, levels = 17:37, ordered = TRUE)
+#Checking that age is now an ordered factor
+is.ordered(premier$Age)
+#Printing the levels to double check
+levels(premier$Age)
+#From our last section where we examined position, we noticed that goalkeepers and defenders have  very low SCA accross the board, lets remove them from this analysis and only look at midfielders and forwards
+premierage <- filter(premier, Primary_Position == "MF" | Primary_Position == "FW")
+#Printing table of how many midfield and forward players fall into every age
+tab <- table(premierage$Age)
+#Transpose table to make horizontal
+tab <- t(tab)
+knitr::kable(tab)
+```
+
+Shown here is the age distribution of midfield and forward players, we can see that it is approximately normally distributed with most players falling into the 22-27 range.
+
+```{r}
+#Create table for mean SCA per 90 minutes for every age of midfielders and attackers
+ageSCA <- premierage %>%
+  group_by(Age) %>%
+  summarise(SCA = mean(SCA90))%>%
+  select(Age, SCA)
+#Plot table
+ggplot(ageSCA, aes(x = Age, y = SCA)) +
+  geom_bar(stat = "identity", fill = "cadetblue") +
+  labs(title = "Mean Shot Creating Actions per 90 minutes in terms of age", x = "Age", y = "SCA90")
+```
+
+From this bar chart, no clear correlation can be drawn between shot creating actions per 90 minutes and the age of player. However, we can observe a large difference between similar ages, e.g. 36 and 37. This could be due to sample sample sizes, if we take a look back at our table we can see that there is only one 36 year old and one 37 year old in this entire sample of midfield and forward players. Let's try to rectify this problem by grouping players with a similar age together in an age range.
+
+```{r}
+#Creating a new column AgeRange in our data of midfielders and forwards, group the players by age in 3 year intervals
+AgeBreaks <- c(17, 20, 23, 26, 29, 32, 35, 38)
+AgeLabels <- c("17-19", "20-22", "23-25", "26-28", "29-31", "32-34","35-37")
+premierage$AgeRange <- cut(as.numeric(levels(premierage$Age)[premierage$Age]), breaks = AgeBreaks, labels = AgeLabels, include.lowest = TRUE)
+#Create the same table as above except using our age ranges
+ageSCA <- premierage %>%
+  group_by(AgeRange) %>%
+  summarise(SCA = mean(SCA90))%>%
+  select(AgeRange, SCA)
+#Plot table
+ggplot(ageSCA, aes(x = AgeRange, y = SCA)) +
+  geom_bar(stat = "identity", fill = "cyan3") +
+  labs(title = "Mean Shot Creating Actions per 90 minutes in terms of age", x = "Age", y = "SCA90")
+```
+
+Hence from this we can draw the same conclusions as above, there is no clear correlation between age and overall shot creating actions per 90 minutes for midfield and forward players. However lets examine if we see a relationship for the specific shot creating actions.
+
+```{r}
+#Plotting Pass_Live_SCA of midfeilders and forwards grouped by age range
+ageLiveSCA <- premierage %>%
+  group_by(AgeRange) %>%
+  summarise(SCAlive = mean(Pass_Live_SCA90))%>%
+  select(AgeRange, SCAlive)
+
+ggplot(ageLiveSCA, aes(x = AgeRange, y = SCAlive)) +
+  geom_bar(stat = "identity", fill = "cyan4") +
+  labs(title = "Mean Shot Creating Actions per 90 minutes in terms of age", x = "Age", y = "SCA90")
+
+#Plotting rest of specific SCA variables by age range
+SCAage <- premierage %>%
+  group_by(AgeRange) %>%
+  summarise(DeadSCA = mean(Pass_Dead_SCA90), TOSCA = mean(Take_On_SCA90), ShotSCA = mean(Shots_SCA90), FoulSCA = mean(Fouls_Drawn_SCA90), DefenseSCA = mean(Defensive_Action_SCA90))%>%
+  select(AgeRange, DeadSCA, TOSCA, ShotSCA, FoulSCA, DefenseSCA)
+
+plot_data <- tidyr::gather(SCAage, key = "Variable", value = "Value", -AgeRange)
+ggplot(plot_data, aes(x = AgeRange, y = Value, fill = Variable)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), alpha = 0.7) +
+  labs(title = "Grouped Barplot of Age Ranges and Variables",
+       x = "Age Range",
+       y = "Value")
+```
+
+*Note: I have plotted Pass_Live separately to other variables as it contains far greater values and makes it visually harder to observe other values.*
+
+From these plots of all the specific SCA variables we notice a few small trends. We can observe that on average the variables Take_Ons, Fouls_Drawn and Defensive_Actions all decrease with age, Dead_Pass increases with age and both Pass_Live and Shots stay roughly the same with age.
+
+## Conclusion
+
+To conclude, from the analysis section we were able to analyse various components of this dataset under the headings provided above:
+
+-   From the overview of SCA and GCA for the individual players, we observed that the majority of players have low SCA and GCA values however there are a few elite players who have comparatively very high values. These players were represented in the plots, we could observe that most players overlapped in the plots meaning that the players who had very high SCA values also had very high GCA values.
+
+-   From comparing live and dead passes by club, we could observe that different teams rely on different creating actions for shots and goals. Some teams were comparatively consistent between metrics, however others were very high in one and low in the other, these teams were represented on the two plots.
+
+-   From comparing the metrics by position, we learned that on average a players position has a large effect on their overall SCA and GCA values, with forwards(FW) and midfielders(MF) having far superior SCA and GCA values on average than defenders(DF) and goalkeepers(GK).
+
+-   From comparing SCA with age, my hypothesis was that younger players would be on average better at specific SCA variables than the older players, and vice-versa. However we could only observe small correlation trends by age for these metrics.
