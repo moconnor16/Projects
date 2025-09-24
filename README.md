@@ -3,10 +3,10 @@
 This repo contains my undergraduate thesis and a personal sports data analytics project.
 
 ## 📘 Thesis
-- [Thesis PDF](thesis/Thesis-Mark-OConnor.pdf)
-- [Code: fyp-diabetes.qmd](thesis/fyp-diabetes.qmd)
-- [Code: fyp-sim-study.qmd](thesis/fyp-sim-study.qmd)
+- [Thesis PDF](Projects/Thesis/Thesis%20-Mark%20O'Connor.pdf)
+- [Code: fyp-diabetes.qmd](Projects/Thesis/fyp%20diabetes.qmd)
+- [Code: fyp-sim-study.qmd](Projects/Thesis/fyp%20sim%20study.qmd)
 
 ## ⚽ Premier League Report
-- [Report](premier-league-report/Premier-League-Report.qmd)
-- [Data](premier-league-report/PremierStats.xlsx)
+- [Report](Projects/Premier%20League%20Statistical%20Analysis/Premier%20League%20Report.qmd)
+- [Data](Projects/Premier%20League%20Statistical%20Analysis/PremierStats.xlsx)
