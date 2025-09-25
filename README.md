@@ -2,7 +2,7 @@
 
 This repo contains my undergraduate thesis and a personal sports data analytics project.
 
-The full thesis and code can be accessed directly below. To view the full sports data analytics project you can download the R Quarto file and its associated data file below.
+My full thesis and code can be accessed directly below. To view my sports data analytics project in full you can download the R Quarto file and its associated data file below.
 
 ## 📘 Thesis
 - [Thesis PDF](Projects/Thesis/Thesis%20-Mark%20O'Connor.pdf)
