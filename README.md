@@ -10,6 +10,6 @@ The full PDFs and code can be accessed in this repo.
 - [Code: fyp-sim-study.qmd](Projects/Thesis/fyp%20sim%20study.qmd)
 
 ## ⚽ Premier League Report
-- [Report](Projects/Premier%20League%20Statistical%20Analysis/Premier%20League%20Report.pdf)
+- [Report PDF](Projects/Premier%20League%20Statistical%20Analysis/Premier%20League%20Report.pdf)
 - [Code](Projects/Premier%20League%20Statistical%20Analysis/Premier%20League%20Report.qmd)
 - [Data](Projects/Premier%20League%20Statistical%20Analysis/PremierStats.xlsx)
