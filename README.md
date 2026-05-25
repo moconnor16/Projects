@@ -15,3 +15,6 @@ The full PDFs and code can be accessed in this repo.
 - [Data](Projects/Premier%20League%20Statistical%20Analysis/PremierStats.xlsx)
 
 ## ⚽ Do Red Cards lead to more Goals?
+- [Notebook](Projects/Red%20Cards/Do%20red%20cards%20lead%20to%20more%20goals.ipynb)
+- [Games Data](Projects/blob/main/Projects/Red%20Cards/games.csv)
+- [Events Data](Projects/blob/main/Projects/Red%20Cards/events.csv)
