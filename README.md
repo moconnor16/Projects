@@ -16,5 +16,5 @@ The full PDFs and code can be accessed in this repo.
 
 ## ⚽ Do Red Cards lead to more Goals?
 - [Notebook](Projects/Red%20Cards/Do%20red%20cards%20lead%20to%20more%20goals.ipynb)
-- [Games Data](Projects/blob/main/Projects/Red%20Cards/games.csv)
-- [Events Data](Projects/blob/main/Projects/Red%20Cards/events.csv)
+- [Games Data](Projects/Red%20Cards/games.csv)
+- [Events Data](Projects/Red%20Cards/events.csv)
